@@ -25,9 +25,8 @@ def make_shell_context():
         'SystemSettings': SystemSettings
     }
 
-@app.before_first_request
 def setup_app():
-    """Initialize application on first request"""
+    """Initialize application"""
     # Create default admin user
     create_default_admin()
 
@@ -70,7 +69,7 @@ if __name__ == '__main__':
     # Create tables if they don't exist
     with app.app_context():
         db.create_all()
-        create_default_admin()
+        setup_app()
 
     # Run the application
     app.run(host=host, port=port, debug=debug)

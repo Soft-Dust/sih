@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+
+{% block title %}{{ section.name }} Timetable{% endblock %}
+
+{% block extra_css %}
+<style>
+    .timetable-container {
+        max-height: 80vh;
+        overflow: auto;
+    }
+    .timetable-cell {
+        min-height: 80px;
+        vertical-align: top;
+        padding: 5px;
+        border: 1px solid #dee2e6;
+    }
+    .timetable-entry {
+        background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        border-radius: 4px;
+        padding: 6px;
+        margin: 2px 0;
+        font-size: 0.8rem;
+        border-left: 3px solid #1976d2;
+        min-height: 60px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .lab-entry {
+        background: linear-gradient(135deg, #fff3e0 0%, #ffcc02 30%);
+        border-left-color: #f57c00;
+    }
+    .elective-entry {
+        background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+        border-left-color: #9c27b0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="fas fa-users me-2"></i>
+                {{ section.name }} Timetable
+            </h1>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="refreshTimetable()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                </button>
+                <button class="btn btn-success" onclick="exportTimetable('csv')">
+                    <i class="fas fa-file-csv me-2"></i>Export CSV
+                </button>
+                <button class="btn btn-info" onclick="exportTimetable('pdf')">
+                    <i class="fas fa-file-pdf me-2"></i>Export PDF
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Timetable Grid -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="timetable-container">
+                    <div id="timetableGrid">
+                        <div class="text-center p-4">
+                            <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                            <p>Loading timetable...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const sectionId = {{ section.id }};
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadTimetable();
+    });
+
+    async function loadTimetable() {
+        try {
+            showLoading(true);
+
+            const [entriesResponse, slotsResponse] = await Promise.all([
+                fetch(`/api/timetable/section/${sectionId}`),
+                fetch('/api/timetable-slots')
+            ]);
+
+            const entries = await entriesResponse.json();
+            const slots = await slotsResponse.json();
+
+            renderTimetableGrid(entries, slots);
+
+        } catch (error) {
+            console.error('Error loading timetable:', error);
+            showAlert('Failed to load timetable', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function renderTimetableGrid(entries, slots) {
+        if (slots.length === 0) {
+            document.getElementById('timetableGrid').innerHTML = `
+                <div class="text-center p-4">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-3 text-warning"></i>
+                    <p>No time slots configured.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Group slots by day
+        const slotsByDay = {};
+        const days = [];
+        const periods = new Set();
+
+        slots.forEach(slot => {
+            if (!slot.is_break) {
+                if (!slotsByDay[slot.day_of_week]) {
+                    slotsByDay[slot.day_of_week] = {};
+                    days.push(slot.day_of_week);
+                }
+                slotsByDay[slot.day_of_week][slot.period_no] = slot;
+                periods.add(slot.period_no);
+            }
+        });
+
+        const sortedPeriods = Array.from(periods).sort((a, b) => a - b);
+
+        // Create grid
+        let gridHTML = `
+            <table class="table table-bordered mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Period</th>
+                        ${days.map(day => `<th class="text-center">${day}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        sortedPeriods.forEach(period => {
+            let timeSlot = null;
+            for (const day of days) {
+                if (slotsByDay[day][period]) {
+                    timeSlot = slotsByDay[day][period];
+                    break;
+                }
+            }
+
+            const timeInfo = timeSlot ?
+                `${timeSlot.start_time} - ${timeSlot.end_time}` :
+                `Period ${period}`;
+
+            gridHTML += `
+                <tr>
+                    <td class="fw-bold">${timeInfo}</td>
+                    ${days.map(day => {
+                        const slot = slotsByDay[day][period];
+                        if (!slot) {
+                            return '<td class="timetable-cell text-center text-muted">-</td>';
+                        }
+
+                        const entry = entries.find(e => e.slot_id === slot.id);
+                        if (!entry) {
+                            return '<td class="timetable-cell text-center text-muted">Free</td>';
+                        }
+
+                        const entryClass = entry.is_lab ? 'lab-entry' : '';
+                        return `
+                            <td class="timetable-cell">
+                                <div class="timetable-entry ${entryClass}">
+                                    <div class="fw-bold">${entry.subject_code || 'N/A'}</div>
+                                    <div>${entry.subject_name || 'Unknown'}</div>
+                                    <div class="text-muted">${entry.teacher_name || 'TBA'}</div>
+                                    <div class="text-muted">${entry.classroom_name || 'TBA'}</div>
+                                </div>
+                            </td>
+                        `;
+                    }).join('')}
+                </tr>
+            `;
+        });
+
+        gridHTML += '</tbody></table>';
+        document.getElementById('timetableGrid').innerHTML = gridHTML;
+    }
+
+    function refreshTimetable() {
+        loadTimetable();
+    }
+
+    function exportTimetable(format) {
+        if (!['csv', 'pdf'].includes(format)) {
+            showAlert('Invalid format specified', 'danger');
+            return;
+        }
+
+        window.open(`/api/timetable/export?format=${format}&target=section:${sectionId}`, '_blank');
+    }
+</script>
+{% endblock %}

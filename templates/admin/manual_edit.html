@@ -1,0 +1,358 @@
+{% extends "base.html" %}
+
+{% block title %}Manual Timetable Edit{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="fas fa-edit me-2"></i>
+                Manual Timetable Editor
+            </h1>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="refreshTimetable()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                </button>
+                <button class="btn btn-success" onclick="saveChanges()">
+                    <i class="fas fa-save me-2"></i>Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Instructions -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <h6><i class="fas fa-info-circle me-2"></i>Instructions:</h6>
+            <ul class="mb-0">
+                <li>Click on any cell to edit the timetable entry</li>
+                <li>Red highlighting indicates conflicts</li>
+                <li>Changes are saved automatically when you move to another cell</li>
+                <li>Use "Refresh" to reload the current timetable</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Timetable Grid -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body p-0">
+                <div id="editableTimetableGrid">
+                    <div class="text-center p-4">
+                        <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                        <p>Loading editable timetable...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editCellModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Timetable Entry</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editCellForm">
+                    <div class="mb-3">
+                        <label class="form-label">Section</label>
+                        <select class="form-select" name="section_id" id="editSectionSelect" required>
+                            <option value="">Select Section</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Subject Instance</label>
+                        <select class="form-select" name="subject_instance_id" id="editSubjectSelect">
+                            <option value="">Select Subject</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Teacher</label>
+                        <select class="form-select" name="teacher_id" id="editTeacherSelect">
+                            <option value="">Select Teacher</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Classroom</label>
+                        <select class="form-select" name="classroom_id" id="editClassroomSelect">
+                            <option value="">Select Classroom</option>
+                        </select>
+                    </div>
+                    <input type="hidden" name="slot_id" id="editSlotId">
+                </form>
+                <div id="conflictWarnings" class="alert alert-warning d-none">
+                    <h6>Conflicts Detected:</h6>
+                    <ul id="conflictList"></ul>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-danger me-2" onclick="clearCell()">Clear Cell</button>
+                <button type="button" class="btn btn-primary" onclick="saveCell()">Save</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let currentEditSlot = null;
+    let sections = [];
+    let subjects = [];
+    let teachers = [];
+    let classrooms = [];
+    let subjectInstances = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadInitialData();
+    });
+
+    async function loadInitialData() {
+        try {
+            showLoading(true);
+
+            const [sectionsRes, subjectsRes, teachersRes, classroomsRes, instancesRes] = await Promise.all([
+                fetch('/api/sections'),
+                fetch('/api/subjects'),
+                fetch('/api/teachers'),
+                fetch('/api/classrooms'),
+                fetch('/api/subject-instances')
+            ]);
+
+            sections = await sectionsRes.json();
+            subjects = await subjectsRes.json();
+            teachers = await teachersRes.json();
+            classrooms = await classroomsRes.json();
+            subjectInstances = await instancesRes.json();
+
+            populateSelects();
+            await loadTimetable();
+
+        } catch (error) {
+            console.error('Error loading data:', error);
+            showAlert('Failed to load data', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function populateSelects() {
+        // Populate sections
+        const sectionSelect = document.getElementById('editSectionSelect');
+        sectionSelect.innerHTML = '<option value="">Select Section</option>' +
+            sections.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+        // Populate teachers
+        const teacherSelect = document.getElementById('editTeacherSelect');
+        teacherSelect.innerHTML = '<option value="">Select Teacher</option>' +
+            teachers.map(t => `<option value="${t.id}">${t.full_name}</option>`).join('');
+
+        // Populate classrooms
+        const classroomSelect = document.getElementById('editClassroomSelect');
+        classroomSelect.innerHTML = '<option value="">Select Classroom</option>' +
+            classrooms.map(c => `<option value="${c.id}">${c.name} (${c.room_type})</option>`).join('');
+
+        // Section change handler for subjects
+        sectionSelect.addEventListener('change', function() {
+            updateSubjectOptions(this.value);
+        });
+    }
+
+    function updateSubjectOptions(sectionId) {
+        const subjectSelect = document.getElementById('editSubjectSelect');
+        const filteredInstances = subjectInstances.filter(si => si.section_id == sectionId);
+
+        subjectSelect.innerHTML = '<option value="">Select Subject</option>' +
+            filteredInstances.map(si =>
+                `<option value="${si.id}">${si.subject_name} (${si.subject_code})</option>`
+            ).join('');
+    }
+
+    async function loadTimetable() {
+        try {
+            const [entriesResponse, slotsResponse] = await Promise.all([
+                fetch('/api/timetable/master'),
+                fetch('/api/timetable-slots')
+            ]);
+
+            const entries = await entriesResponse.json();
+            const slots = await slotsResponse.json();
+
+            renderEditableGrid(entries, slots);
+
+        } catch (error) {
+            console.error('Error loading timetable:', error);
+            showAlert('Failed to load timetable', 'danger');
+        }
+    }
+
+    function renderEditableGrid(entries, slots) {
+        if (slots.length === 0) {
+            document.getElementById('editableTimetableGrid').innerHTML = `
+                <div class="text-center p-4">
+                    <p>No time slots configured. Please configure time slots first.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Group slots and entries
+        const slotsByDay = {};
+        const days = [];
+        const periods = new Set();
+
+        slots.forEach(slot => {
+            if (!slot.is_break) {
+                if (!slotsByDay[slot.day_of_week]) {
+                    slotsByDay[slot.day_of_week] = {};
+                    days.push(slot.day_of_week);
+                }
+                slotsByDay[slot.day_of_week][slot.period_no] = slot;
+                periods.add(slot.period_no);
+            }
+        });
+
+        const sortedPeriods = Array.from(periods).sort((a, b) => a - b);
+
+        // Create editable grid
+        let gridHTML = `
+            <table class="table table-bordered mb-0">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Period</th>
+                        ${days.map(day => `<th class="text-center">${day}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        sortedPeriods.forEach(period => {
+            let timeSlot = null;
+            for (const day of days) {
+                if (slotsByDay[day][period]) {
+                    timeSlot = slotsByDay[day][period];
+                    break;
+                }
+            }
+
+            const timeInfo = timeSlot ?
+                `Period ${period}<br>${timeSlot.start_time} - ${timeSlot.end_time}` :
+                `Period ${period}`;
+
+            gridHTML += `
+                <tr>
+                    <td class="fw-bold">${timeInfo}</td>
+                    ${days.map(day => {
+                        const slot = slotsByDay[day][period];
+                        if (!slot) {
+                            return '<td class="timetable-cell text-center text-muted">-</td>';
+                        }
+
+                        const slotEntries = entries.filter(e => e.slot_id === slot.id);
+                        let cellContent = '';
+
+                        if (slotEntries.length === 0) {
+                            cellContent = '<div class="text-center text-muted p-2">Free</div>';
+                        } else {
+                            cellContent = slotEntries.map(entry => `
+                                <div class="timetable-entry mb-1 p-2 border rounded ${slotEntries.length > 1 ? 'border-danger' : ''}">
+                                    <small class="fw-bold">${entry.section_name}</small><br>
+                                    <small>${entry.subject_code || 'N/A'}</small><br>
+                                    <small class="text-muted">${entry.teacher_name || 'TBA'}</small><br>
+                                    <small class="text-muted">${entry.classroom_name || 'TBA'}</small>
+                                </div>
+                            `).join('');
+                        }
+
+                        return `
+                            <td class="timetable-cell" style="cursor: pointer; min-height: 100px;"
+                                onclick="editCell(${slot.id})" title="Click to edit">
+                                ${cellContent}
+                            </td>
+                        `;
+                    }).join('')}
+                </tr>
+            `;
+        });
+
+        gridHTML += '</tbody></table>';
+        document.getElementById('editableTimetableGrid').innerHTML = gridHTML;
+    }
+
+    function editCell(slotId) {
+        currentEditSlot = slotId;
+        document.getElementById('editSlotId').value = slotId;
+
+        // Clear form
+        document.getElementById('editCellForm').reset();
+        document.getElementById('editSlotId').value = slotId;
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('editCellModal'));
+        modal.show();
+    }
+
+    async function saveCell() {
+        const form = document.getElementById('editCellForm');
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
+
+        try {
+            const response = await fetch('/api/timetable/entry', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                if (result.conflicts && result.conflicts.length > 0) {
+                    showConflicts(result.conflicts);
+                } else {
+                    showAlert('Entry saved successfully', 'success');
+                    bootstrap.Modal.getInstance(document.getElementById('editCellModal')).hide();
+                    loadTimetable();
+                }
+            } else {
+                showAlert(result.error || 'Failed to save entry', 'danger');
+            }
+
+        } catch (error) {
+            console.error('Error saving entry:', error);
+            showAlert('Network error', 'danger');
+        }
+    }
+
+    function showConflicts(conflicts) {
+        const warningsDiv = document.getElementById('conflictWarnings');
+        const conflictsList = document.getElementById('conflictList');
+
+        conflictsList.innerHTML = conflicts.map(conflict => `<li>${conflict.message}</li>`).join('');
+        warningsDiv.classList.remove('d-none');
+    }
+
+    async function clearCell() {
+        // Implementation for clearing a cell would go here
+        showAlert('Clear cell functionality coming soon', 'info');
+    }
+
+    function refreshTimetable() {
+        loadTimetable();
+    }
+
+    function saveChanges() {
+        showAlert('All changes are saved automatically', 'info');
+    }
+</script>
+{% endblock %}
