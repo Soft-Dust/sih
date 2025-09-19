@@ -1,0 +1,370 @@
+{% extends "base.html" %}
+
+{% block title %}Master Timetable{% endblock %}
+
+{% block extra_css %}
+<style>
+    .timetable-container {
+        max-height: 80vh;
+        overflow: auto;
+    }
+    .timetable-cell {
+        min-height: 100px;
+        vertical-align: top;
+        padding: 5px;
+        border: 1px solid #dee2e6;
+        position: relative;
+    }
+    .timetable-entry {
+        background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        border-radius: 4px;
+        padding: 4px;
+        margin: 2px 0;
+        font-size: 0.75rem;
+        border-left: 3px solid #1976d2;
+    }
+    .lab-entry {
+        background: linear-gradient(135deg, #fff3e0 0%, #ffcc02 30%);
+        border-left-color: #f57c00;
+    }
+    .elective-entry {
+        background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%);
+        border-left-color: #9c27b0;
+    }
+    .time-header {
+        background-color: #f8f9fa;
+        font-weight: 600;
+        position: sticky;
+        left: 0;
+        z-index: 10;
+    }
+    .day-header {
+        background-color: #343a40;
+        color: white;
+        font-weight: 600;
+        position: sticky;
+        top: 0;
+        z-index: 11;
+    }
+    .sticky-corner {
+        position: sticky;
+        top: 0;
+        left: 0;
+        z-index: 12;
+        background-color: #343a40;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="fas fa-table me-2"></i>
+                Master Timetable
+            </h1>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="refreshTimetable()">
+                    <i class="fas fa-sync-alt me-2"></i>Refresh
+                </button>
+                <button class="btn btn-success" onclick="exportTimetable('csv')">
+                    <i class="fas fa-file-csv me-2"></i>Export CSV
+                </button>
+                <button class="btn btn-info" onclick="exportTimetable('pdf')">
+                    <i class="fas fa-file-pdf me-2"></i>Export PDF
+                </button>
+                {% if current_user.role == 'admin' %}
+                <a href="{{ url_for('main.admin_manual_edit') }}" class="btn btn-warning">
+                    <i class="fas fa-edit me-2"></i>Manual Edit
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Legend -->
+<div class="row mb-3">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body py-2">
+                <div class="d-flex align-items-center">
+                    <strong class="me-3">Legend:</strong>
+                    <span class="me-3">
+                        <span class="badge" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); color: #000; border-left: 3px solid #1976d2;">Regular Class</span>
+                    </span>
+                    <span class="me-3">
+                        <span class="badge" style="background: linear-gradient(135deg, #fff3e0 0%, #ffcc02 30%); color: #000; border-left: 3px solid #f57c00;">Lab Session</span>
+                    </span>
+                    <span class="me-3">
+                        <span class="badge" style="background: linear-gradient(135deg, #f3e5f5 0%, #e1bee7 100%); color: #000; border-left: 3px solid #9c27b0;">Elective</span>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Timetable Grid -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body p-0">
+                <div class="timetable-container">
+                    <div id="timetableGrid">
+                        <div class="text-center p-4">
+                            <i class="fas fa-spinner fa-spin fa-2x mb-3"></i>
+                            <p>Loading timetable...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics -->
+<div class="row mt-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h4 id="totalEntries">-</h4>
+                <p class="mb-0">Total Entries</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h4 id="utilization">-</h4>
+                <p class="mb-0">Utilization</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h4 id="labSessions">-</h4>
+                <p class="mb-0">Lab Sessions</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h4 id="conflicts">-</h4>
+                <p class="mb-0">Conflicts</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let timetableData = [];
+    let slotsData = [];
+
+    // Load timetable on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadTimetable();
+    });
+
+    async function loadTimetable() {
+        try {
+            showLoading(true);
+
+            // Load timetable entries and slots in parallel
+            const [entriesResponse, slotsResponse] = await Promise.all([
+                fetch('/api/timetable/master'),
+                fetch('/api/timetable-slots')
+            ]);
+
+            timetableData = await entriesResponse.json();
+            slotsData = await slotsResponse.json();
+
+            renderTimetableGrid();
+            updateStatistics();
+
+        } catch (error) {
+            console.error('Error loading timetable:', error);
+            showAlert('Failed to load timetable', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    function renderTimetableGrid() {
+        if (slotsData.length === 0) {
+            document.getElementById('timetableGrid').innerHTML = `
+                <div class="text-center p-4">
+                    <i class="fas fa-exclamation-triangle fa-2x mb-3 text-warning"></i>
+                    <p>No time slots configured. Please configure time slots first.</p>
+                    {% if current_user.role == 'admin' %}
+                    <a href="{{ url_for('main.admin_timetable_generator') }}" class="btn btn-primary">
+                        Configure Time Slots
+                    </a>
+                    {% endif %}
+                </div>
+            `;
+            return;
+        }
+
+        // Group slots by day and get unique days/periods
+        const slotsByDay = {};
+        const days = [];
+        const periods = new Set();
+
+        slotsData.forEach(slot => {
+            if (!slot.is_break) {
+                if (!slotsByDay[slot.day_of_week]) {
+                    slotsByDay[slot.day_of_week] = {};
+                    days.push(slot.day_of_week);
+                }
+                slotsByDay[slot.day_of_week][slot.period_no] = slot;
+                periods.add(slot.period_no);
+            }
+        });
+
+        const sortedPeriods = Array.from(periods).sort((a, b) => a - b);
+
+        // Create grid
+        let gridHTML = `
+            <table class="table table-bordered mb-0">
+                <thead>
+                    <tr>
+                        <th class="sticky-corner">Time / Day</th>
+                        ${days.map(day => `<th class="day-header text-center">${day}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        sortedPeriods.forEach(period => {
+            // Find a slot for this period to get time info
+            let timeSlot = null;
+            for (const day of days) {
+                if (slotsByDay[day][period]) {
+                    timeSlot = slotsByDay[day][period];
+                    break;
+                }
+            }
+
+            const timeInfo = timeSlot ?
+                `Period ${period}<br><small>${timeSlot.start_time} - ${timeSlot.end_time}</small>` :
+                `Period ${period}`;
+
+            gridHTML += `
+                <tr>
+                    <td class="time-header">${timeInfo}</td>
+                    ${days.map(day => {
+                        const slot = slotsByDay[day][period];
+                        if (!slot) {
+                            return '<td class="timetable-cell">-</td>';
+                        }
+
+                        const entries = timetableData.filter(entry =>
+                            entry.slot_id === slot.id
+                        );
+
+                        let cellContent = '';
+                        entries.forEach(entry => {
+                            const entryClass = getEntryClass(entry);
+                            cellContent += `
+                                <div class="timetable-entry ${entryClass}" title="Click for details" onclick="showEntryDetails(${entry.id})">
+                                    <div class="fw-bold">${entry.section_name}</div>
+                                    <div>${entry.subject_code || 'N/A'}</div>
+                                    <div class="text-muted">${entry.teacher_name || 'TBA'}</div>
+                                    <div class="text-muted">${entry.classroom_name || 'TBA'}</div>
+                                </div>
+                            `;
+                        });
+
+                        return `<td class="timetable-cell">${cellContent}</td>`;
+                    }).join('')}
+                </tr>
+            `;
+        });
+
+        gridHTML += '</tbody></table>';
+        document.getElementById('timetableGrid').innerHTML = gridHTML;
+    }
+
+    function getEntryClass(entry) {
+        if (entry.is_lab) {
+            return 'lab-entry';
+        }
+        // Check if it's elective (would need additional API call or data)
+        return '';
+    }
+
+    function updateStatistics() {
+        const totalEntries = timetableData.length;
+        const labSessions = timetableData.filter(entry => entry.is_lab).length;
+
+        // Calculate utilization
+        const totalSlots = slotsData.filter(slot => !slot.is_break).length;
+        const utilization = totalSlots > 0 ? Math.round((totalEntries / totalSlots) * 100) : 0;
+
+        // Count conflicts (simplified - would need more sophisticated logic)
+        const conflicts = 0; // Placeholder
+
+        document.getElementById('totalEntries').textContent = totalEntries;
+        document.getElementById('labSessions').textContent = labSessions;
+        document.getElementById('utilization').textContent = utilization + '%';
+        document.getElementById('conflicts').textContent = conflicts;
+    }
+
+    function showEntryDetails(entryId) {
+        const entry = timetableData.find(e => e.id === entryId);
+        if (!entry) return;
+
+        const modalBody = `
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Class Details</h6>
+                    <p><strong>Section:</strong> ${entry.section_name}</p>
+                    <p><strong>Subject:</strong> ${entry.subject_name || 'N/A'} (${entry.subject_code || 'N/A'})</p>
+                    <p><strong>Type:</strong> ${entry.is_lab ? 'Lab Session' : 'Regular Class'}</p>
+                </div>
+                <div class="col-md-6">
+                    <h6>Schedule Details</h6>
+                    <p><strong>Day:</strong> ${entry.day_of_week}</p>
+                    <p><strong>Time:</strong> ${entry.start_time} - ${entry.end_time}</p>
+                    <p><strong>Period:</strong> ${entry.period_no}</p>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <h6>Resources</h6>
+                    <p><strong>Teacher:</strong> ${entry.teacher_name || 'TBA'}</p>
+                    <p><strong>Classroom:</strong> ${entry.classroom_name || 'TBA'}</p>
+                </div>
+            </div>
+        `;
+
+        const modal = createModal(
+            `${entry.subject_code || 'Class'} - ${entry.section_name}`,
+            modalBody,
+            [{ text: 'Close', className: 'btn-secondary', dismiss: true }]
+        );
+
+        modal.show();
+    }
+
+    function refreshTimetable() {
+        loadTimetable();
+    }
+
+    function exportTimetable(format) {
+        if (!['csv', 'pdf'].includes(format)) {
+            showAlert('Invalid format specified', 'danger');
+            return;
+        }
+
+        window.open(`/api/timetable/export?format=${format}&target=master`, '_blank');
+    }
+</script>
+{% endblock %}

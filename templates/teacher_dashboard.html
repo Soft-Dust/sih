@@ -1,0 +1,402 @@
+{% extends "base.html" %}
+
+{% block title %}Teacher Dashboard - Timetable System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-chalkboard-teacher me-2"></i>
+            Teacher Dashboard
+        </h1>
+        <p class="text-muted">Welcome, {{ current_user.full_name }}!</p>
+    </div>
+</div>
+
+<!-- Quick Stats -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 id="totalClasses">-</h4>
+                        <p class="mb-0">Classes This Week</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-calendar-alt fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 id="totalSubjects">-</h4>
+                        <p class="mb-0">Subjects Teaching</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-book fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 id="totalSections">-</h4>
+                        <p class="mb-0">Sections</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 id="todayClasses">-</h4>
+                        <p class="mb-0">Classes Today</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-clock fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-bolt me-2"></i>
+                    Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <a href="{{ url_for('main.my_timetable') }}" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-calendar me-2"></i>
+                            View My Timetable
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <button class="btn btn-success btn-lg w-100" onclick="exportMyTimetable()">
+                            <i class="fas fa-download me-2"></i>
+                            Export Timetable
+                        </button>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{{ url_for('main.view_master_timetable') }}" class="btn btn-info btn-lg w-100">
+                            <i class="fas fa-table me-2"></i>
+                            View Master Timetable
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Today's Schedule -->
+<div class="row">
+    <div class="col-md-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-calendar-day me-2"></i>
+                    Today's Schedule
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="todaySchedule">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Loading schedule...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Teaching Summary
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="teachingSummary">
+                    <div class="mb-3">
+                        <h6>Subjects You Teach:</h6>
+                        <ul id="subjectsList" class="list-unstyled">
+                            <li class="text-muted">Loading...</li>
+                        </ul>
+                    </div>
+
+                    <div class="mb-3">
+                        <h6>Sections You Handle:</h6>
+                        <ul id="sectionsList" class="list-unstyled">
+                            <li class="text-muted">Loading...</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h6>Weekly Load:</h6>
+                        <div id="weeklyLoad" class="progress mb-2">
+                            <div class="progress-bar" style="width: 0%"></div>
+                        </div>
+                        <small class="text-muted" id="loadText">0 periods this week</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Weekly Schedule Preview -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-calendar-week me-2"></i>
+                    Weekly Schedule Preview
+                </h5>
+                <a href="{{ url_for('main.my_timetable') }}" class="btn btn-sm btn-outline-primary">
+                    View Full Timetable
+                </a>
+            </div>
+            <div class="card-body">
+                <div id="weeklySchedule" class="table-responsive">
+                    <div class="text-center text-muted">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        Loading weekly schedule...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    let teacherId = null;
+
+    // Get current user info and load data
+    async function loadTeacherData() {
+        try {
+            // Get current user info
+            const userResponse = await fetch('/api/current-user');
+            const userData = await userResponse.json();
+
+            if (userData.user && userData.user.teacher_id) {
+                teacherId = userData.user.teacher_id;
+                await loadTimetableData();
+                await loadTeachingSummary();
+            } else {
+                console.error('Teacher ID not found');
+            }
+        } catch (error) {
+            console.error('Error loading teacher data:', error);
+        }
+    }
+
+    async function loadTimetableData() {
+        if (!teacherId) return;
+
+        try {
+            const response = await fetch(`/api/timetable/teacher/${teacherId}`);
+            const entries = await response.json();
+
+            updateStats(entries);
+            updateTodaySchedule(entries);
+            updateWeeklyPreview(entries);
+        } catch (error) {
+            console.error('Error loading timetable data:', error);
+        }
+    }
+
+    async function loadTeachingSummary() {
+        if (!teacherId) return;
+
+        try {
+            // Get teacher-subject assignments
+            const response = await fetch('/api/teacher-subjects');
+            const assignments = await response.json();
+
+            const myAssignments = assignments.filter(a => a.teacher_id === teacherId);
+            const subjects = [...new Set(myAssignments.map(a => a.subject_name))];
+
+            // Get sections from timetable
+            const timetableResponse = await fetch(`/api/timetable/teacher/${teacherId}`);
+            const entries = await timetableResponse.json();
+            const sections = [...new Set(entries.map(e => e.section_name))];
+
+            // Update UI
+            const subjectsList = document.getElementById('subjectsList');
+            subjectsList.innerHTML = subjects.map(s => `<li><i class="fas fa-book me-2"></i>${s}</li>`).join('');
+
+            const sectionsList = document.getElementById('sectionsList');
+            sectionsList.innerHTML = sections.map(s => `<li><i class="fas fa-users me-2"></i>${s}</li>`).join('');
+
+            // Update summary stats
+            document.getElementById('totalSubjects').textContent = subjects.length;
+            document.getElementById('totalSections').textContent = sections.length;
+
+        } catch (error) {
+            console.error('Error loading teaching summary:', error);
+        }
+    }
+
+    function updateStats(entries) {
+        const totalClasses = entries.length;
+        const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+        const todayClasses = entries.filter(e => e.day_of_week === today).length;
+
+        document.getElementById('totalClasses').textContent = totalClasses;
+        document.getElementById('todayClasses').textContent = todayClasses;
+
+        // Update weekly load
+        const maxLoad = 30; // Assume max 30 periods per week
+        const loadPercentage = Math.min((totalClasses / maxLoad) * 100, 100);
+
+        const progressBar = document.querySelector('#weeklyLoad .progress-bar');
+        progressBar.style.width = loadPercentage + '%';
+
+        if (loadPercentage <= 50) {
+            progressBar.className = 'progress-bar bg-success';
+        } else if (loadPercentage <= 80) {
+            progressBar.className = 'progress-bar bg-warning';
+        } else {
+            progressBar.className = 'progress-bar bg-danger';
+        }
+
+        document.getElementById('loadText').textContent = `${totalClasses} periods this week`;
+    }
+
+    function updateTodaySchedule(entries) {
+        const today = new Date().toLocaleDateString('en-US', { weekday: 'long' });
+        const todayEntries = entries.filter(e => e.day_of_week === today)
+                                   .sort((a, b) => a.period_no - b.period_no);
+
+        const scheduleDiv = document.getElementById('todaySchedule');
+
+        if (todayEntries.length === 0) {
+            scheduleDiv.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-coffee fa-2x mb-3"></i>
+                    <p>No classes scheduled for today!</p>
+                </div>
+            `;
+            return;
+        }
+
+        const scheduleHTML = todayEntries.map(entry => `
+            <div class="d-flex align-items-center mb-3 p-3 border rounded">
+                <div class="me-3">
+                    <strong>${entry.start_time} - ${entry.end_time}</strong>
+                    <br>
+                    <small class="text-muted">Period ${entry.period_no}</small>
+                </div>
+                <div class="flex-grow-1">
+                    <h6 class="mb-1">${entry.subject_name || 'Unknown Subject'}</h6>
+                    <p class="mb-0 text-muted">
+                        <i class="fas fa-users me-1"></i>${entry.section_name}
+                        <i class="fas fa-door-open ms-3 me-1"></i>${entry.classroom_name || 'TBA'}
+                    </p>
+                </div>
+                ${entry.is_lab ? '<span class="badge bg-info">LAB</span>' : ''}
+            </div>
+        `).join('');
+
+        scheduleDiv.innerHTML = scheduleHTML;
+    }
+
+    function updateWeeklyPreview(entries) {
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+        const periods = [...new Set(entries.map(e => e.period_no))].sort((a, b) => a - b);
+
+        if (periods.length === 0) {
+            document.getElementById('weeklySchedule').innerHTML = `
+                <div class="text-center text-muted">
+                    <p>No timetable data available</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Create timetable grid
+        let tableHTML = `
+            <table class="table table-bordered table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Period</th>
+                        ${days.map(day => `<th>${day}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        periods.forEach(period => {
+            tableHTML += `<tr><td class="fw-bold">Period ${period}</td>`;
+
+            days.forEach(day => {
+                const entry = entries.find(e => e.day_of_week === day && e.period_no === period);
+                if (entry) {
+                    tableHTML += `
+                        <td class="text-center">
+                            <small class="fw-bold">${entry.subject_code || 'N/A'}</small><br>
+                            <small class="text-muted">${entry.section_name}</small><br>
+                            <small class="text-muted">${entry.classroom_name || 'TBA'}</small>
+                        </td>
+                    `;
+                } else {
+                    tableHTML += '<td class="text-center text-muted">-</td>';
+                }
+            });
+
+            tableHTML += '</tr>';
+        });
+
+        tableHTML += '</tbody></table>';
+        document.getElementById('weeklySchedule').innerHTML = tableHTML;
+    }
+
+    function exportMyTimetable() {
+        if (!teacherId) {
+            alert('Teacher ID not found');
+            return;
+        }
+
+        const format = prompt('Export format (csv/pdf):', 'pdf');
+        if (format && ['csv', 'pdf'].includes(format.toLowerCase())) {
+            window.open(`/api/timetable/export?format=${format}&target=teacher:${teacherId}`, '_blank');
+        }
+    }
+
+    // Load data on page load
+    document.addEventListener('DOMContentLoaded', loadTeacherData);
+</script>
+{% endblock %}

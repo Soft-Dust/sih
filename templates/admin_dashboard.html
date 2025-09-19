@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard - Timetable System{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-tachometer-alt me-2"></i>
+            Admin Dashboard
+        </h1>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 id="totalTeachers">-</h4>
+                        <p class="mb-0">Teachers</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-chalkboard-teacher fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 id="totalStudents">-</h4>
+                        <p class="mb-0">Students</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-user-graduate fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 id="totalSections">-</h4>
+                        <p class="mb-0">Sections</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-users fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6 mb-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4 id="scheduledPeriods">-</h4>
+                        <p class="mb-0">Scheduled</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-calendar-check fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-bolt me-2"></i>
+                    Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <a href="{{ url_for('main.admin_timetable_generator') }}" class="btn btn-primary btn-lg w-100">
+                            <i class="fas fa-magic me-2"></i>
+                            Generate Timetable
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{{ url_for('main.view_master_timetable') }}" class="btn btn-success btn-lg w-100">
+                            <i class="fas fa-table me-2"></i>
+                            View Master Timetable
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{{ url_for('main.admin_manual_edit') }}" class="btn btn-warning btn-lg w-100">
+                            <i class="fas fa-edit me-2"></i>
+                            Manual Edit
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Management Sections -->
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-cogs me-2"></i>
+                    Management
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush">
+                    <a href="{{ url_for('main.admin_teachers') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-chalkboard-teacher me-2"></i>
+                            Manage Teachers
+                        </div>
+                        <span class="badge bg-primary rounded-pill" id="teachersBadge">0</span>
+                    </a>
+                    <a href="{{ url_for('main.admin_students') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-user-graduate me-2"></i>
+                            Manage Students
+                        </div>
+                        <span class="badge bg-success rounded-pill" id="studentsBadge">0</span>
+                    </a>
+                    <a href="{{ url_for('main.admin_sections') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-users me-2"></i>
+                            Manage Sections
+                        </div>
+                        <span class="badge bg-info rounded-pill" id="sectionsBadge">0</span>
+                    </a>
+                    <a href="{{ url_for('main.admin_subjects') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-book me-2"></i>
+                            Manage Subjects
+                        </div>
+                        <span class="badge bg-secondary rounded-pill" id="subjectsBadge">0</span>
+                    </a>
+                    <a href="{{ url_for('main.admin_classrooms') }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-door-open me-2"></i>
+                            Manage Classrooms
+                        </div>
+                        <span class="badge bg-warning rounded-pill" id="classroomsBadge">0</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-line me-2"></i>
+                    Recent Activity
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="lastGeneration" class="mb-3">
+                    <h6>Last Timetable Generation</h6>
+                    <p class="text-muted mb-1" id="lastGenerationTime">Never</p>
+                    <p class="mb-0" id="lastGenerationStatus">
+                        <span class="badge bg-secondary">No data</span>
+                    </p>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('main.admin_settings') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-cog me-2"></i>
+                        System Settings
+                    </a>
+                    <button class="btn btn-outline-secondary" onclick="exportMasterTimetable()">
+                        <i class="fas fa-download me-2"></i>
+                        Export Timetable
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Load dashboard statistics
+    async function loadDashboardStats() {
+        try {
+            const response = await fetch('/api/dashboard/stats');
+            const stats = await response.json();
+
+            // Update statistics cards
+            document.getElementById('totalTeachers').textContent = stats.total_teachers;
+            document.getElementById('totalStudents').textContent = stats.total_students;
+            document.getElementById('totalSections').textContent = stats.total_sections;
+            document.getElementById('scheduledPeriods').textContent = stats.scheduled_periods;
+
+            // Update badges
+            document.getElementById('teachersBadge').textContent = stats.total_teachers;
+            document.getElementById('studentsBadge').textContent = stats.total_students;
+            document.getElementById('sectionsBadge').textContent = stats.total_sections;
+            document.getElementById('subjectsBadge').textContent = stats.total_subjects;
+            document.getElementById('classroomsBadge').textContent = stats.total_classrooms;
+
+            // Update last generation info
+            if (stats.last_generation) {
+                const lastGen = stats.last_generation;
+                const date = new Date(lastGen.generation_time);
+                document.getElementById('lastGenerationTime').textContent = date.toLocaleString();
+
+                const statusBadge = document.getElementById('lastGenerationStatus');
+                if (lastGen.success) {
+                    statusBadge.innerHTML = '<span class="badge bg-success">Success</span>';
+                } else {
+                    statusBadge.innerHTML = '<span class="badge bg-danger">Failed</span>';
+                }
+            }
+        } catch (error) {
+            console.error('Error loading dashboard stats:', error);
+        }
+    }
+
+    function exportMasterTimetable() {
+        const format = prompt('Export format (csv/pdf):', 'csv');
+        if (format && ['csv', 'pdf'].includes(format.toLowerCase())) {
+            window.open(`/api/timetable/export?format=${format}&target=master`, '_blank');
+        }
+    }
+
+    // Load stats on page load
+    document.addEventListener('DOMContentLoaded', loadDashboardStats);
+</script>
+{% endblock %}

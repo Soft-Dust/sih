@@ -1,0 +1,543 @@
+{% extends "base.html" %}
+
+{% block title %}Timetable Generator - Admin{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-magic me-2"></i>
+            Timetable Generator
+        </h1>
+    </div>
+</div>
+
+<!-- Generation Controls -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-cog me-2"></i>
+                    Generation Controls
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <button class="btn btn-primary btn-lg w-100" onclick="generateTimetable()">
+                            <i class="fas fa-magic me-2"></i>
+                            Generate Timetable
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-warning btn-lg w-100" onclick="clearTimetable()">
+                            <i class="fas fa-trash me-2"></i>
+                            Clear Current Timetable
+                        </button>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <button class="btn btn-success w-100" onclick="viewMasterTimetable()">
+                            <i class="fas fa-table me-2"></i>
+                            View Generated Timetable
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-info w-100" onclick="exportTimetable()">
+                            <i class="fas fa-download me-2"></i>
+                            Export Timetable
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-info-circle me-2"></i>
+                    Quick Stats
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>Available Slots:</strong>
+                    <span id="availableSlots" class="float-end">-</span>
+                </div>
+                <div class="mb-3">
+                    <strong>Required Periods:</strong>
+                    <span id="requiredPeriods" class="float-end">-</span>
+                </div>
+                <div class="mb-3">
+                    <strong>Teachers:</strong>
+                    <span id="totalTeachers" class="float-end">-</span>
+                </div>
+                <div class="mb-3">
+                    <strong>Classrooms:</strong>
+                    <span id="totalClassrooms" class="float-end">-</span>
+                </div>
+                <div>
+                    <strong>Sections:</strong>
+                    <span id="totalSections" class="float-end">-</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Generation Progress -->
+<div class="row mb-4 d-none" id="generationProgress">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-cogs me-2"></i>
+                    Generation Progress
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="progress mb-3">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         id="progressBar" style="width: 0%"></div>
+                </div>
+                <p id="progressText" class="mb-0">Initializing...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Generation Results -->
+<div class="row mb-4 d-none" id="generationResults">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>
+                    Generation Results
+                </h5>
+            </div>
+            <div class="card-body">
+                <div id="resultsContent">
+                    <!-- Results will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Time Slots Management -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-clock me-2"></i>
+                    Time Slots Configuration
+                </h5>
+                <button class="btn btn-sm btn-primary" onclick="showSlotsConfigModal()">
+                    <i class="fas fa-cog me-1"></i>
+                    Configure
+                </button>
+            </div>
+            <div class="card-body">
+                <div id="slotsPreview" class="table-responsive">
+                    <div class="text-center text-muted">
+                        <p>Loading time slots...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Slots Configuration Modal -->
+<div class="modal fade" id="slotsConfigModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Configure Time Slots</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="slotsConfigForm">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Start Time</label>
+                            <input type="time" class="form-control" id="startTime" value="08:00">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">End Time</label>
+                            <input type="time" class="form-control" id="endTime" value="15:00">
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Period Duration (minutes)</label>
+                            <input type="number" class="form-control" id="periodDuration" value="60" min="30" max="120">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Working Days</label>
+                            <div class="form-check-group">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="monday" checked>
+                                    <label class="form-check-label" for="monday">Monday</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="tuesday" checked>
+                                    <label class="form-check-label" for="tuesday">Tuesday</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="wednesday" checked>
+                                    <label class="form-check-label" for="wednesday">Wednesday</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="thursday" checked>
+                                    <label class="form-check-label" for="thursday">Thursday</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="friday" checked>
+                                    <label class="form-check-label" for="friday">Friday</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="saturday">
+                                    <label class="form-check-label" for="saturday">Saturday</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Break Periods (comma-separated period numbers)</label>
+                        <input type="text" class="form-control" id="breakPeriods" placeholder="e.g., 3,6">
+                        <small class="form-text text-muted">Enter period numbers for breaks (e.g., 3,6 for 3rd and 6th periods)</small>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="generateTimeSlots()">
+                    Generate Slots
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Load initial data
+    document.addEventListener('DOMContentLoaded', function() {
+        loadStats();
+        loadTimeSlots();
+    });
+
+    async function loadStats() {
+        try {
+            const response = await fetch('/api/dashboard/stats');
+            const stats = await response.json();
+
+            document.getElementById('totalTeachers').textContent = stats.total_teachers;
+            document.getElementById('totalClassrooms').textContent = stats.total_classrooms;
+            document.getElementById('totalSections').textContent = stats.total_sections;
+            document.getElementById('availableSlots').textContent = stats.available_slots;
+
+            // Calculate required periods
+            const instancesResponse = await fetch('/api/subject-instances');
+            const instances = await instancesResponse.json();
+            const requiredPeriods = instances.reduce((total, instance) => {
+                return total + instance.required_periods_week + instance.required_lab_hours_week;
+            }, 0);
+
+            document.getElementById('requiredPeriods').textContent = requiredPeriods;
+
+        } catch (error) {
+            console.error('Error loading stats:', error);
+        }
+    }
+
+    async function loadTimeSlots() {
+        try {
+            const response = await fetch('/api/timetable-slots');
+            const slots = await response.json();
+
+            displayTimeSlots(slots);
+
+        } catch (error) {
+            console.error('Error loading time slots:', error);
+        }
+    }
+
+    function displayTimeSlots(slots) {
+        if (slots.length === 0) {
+            document.getElementById('slotsPreview').innerHTML = `
+                <div class="text-center text-muted">
+                    <p>No time slots configured. Click "Configure" to set up time slots.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Group slots by day
+        const slotsByDay = {};
+        slots.forEach(slot => {
+            if (!slotsByDay[slot.day_of_week]) {
+                slotsByDay[slot.day_of_week] = [];
+            }
+            slotsByDay[slot.day_of_week].push(slot);
+        });
+
+        let tableHTML = `
+            <table class="table table-bordered table-sm">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Period</th>
+                        ${Object.keys(slotsByDay).map(day => `<th>${day}</th>`).join('')}
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+
+        const maxPeriods = Math.max(...Object.values(slotsByDay).map(daySlots => daySlots.length));
+
+        for (let period = 1; period <= maxPeriods; period++) {
+            tableHTML += `<tr><td class="fw-bold">Period ${period}</td>`;
+
+            Object.keys(slotsByDay).forEach(day => {
+                const slot = slotsByDay[day].find(s => s.period_no === period);
+                if (slot) {
+                    const cellClass = slot.is_break ? 'table-warning' : '';
+                    const slotType = slot.is_break ? '(Break)' : '';
+                    tableHTML += `
+                        <td class="${cellClass}">
+                            ${slot.start_time} - ${slot.end_time}
+                            ${slotType}
+                        </td>
+                    `;
+                } else {
+                    tableHTML += '<td class="text-muted">-</td>';
+                }
+            });
+
+            tableHTML += '</tr>';
+        }
+
+        tableHTML += '</tbody></table>';
+        document.getElementById('slotsPreview').innerHTML = tableHTML;
+    }
+
+    function showSlotsConfigModal() {
+        const modal = new bootstrap.Modal(document.getElementById('slotsConfigModal'));
+        modal.show();
+    }
+
+    async function generateTimeSlots() {
+        const formData = {
+            start_time: document.getElementById('startTime').value,
+            end_time: document.getElementById('endTime').value,
+            period_duration: parseInt(document.getElementById('periodDuration').value),
+            working_days: [],
+            break_periods: []
+        };
+
+        // Get working days
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dayIds = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+        dayIds.forEach((id, index) => {
+            if (document.getElementById(id).checked) {
+                formData.working_days.push(days[index]);
+            }
+        });
+
+        // Get break periods
+        const breakPeriodsStr = document.getElementById('breakPeriods').value.trim();
+        if (breakPeriodsStr) {
+            formData.break_periods = breakPeriodsStr.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p));
+        }
+
+        try {
+            showLoading(true);
+
+            const response = await fetch('/api/timetable-slots/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                showAlert('Time slots generated successfully', 'success');
+                bootstrap.Modal.getInstance(document.getElementById('slotsConfigModal')).hide();
+                loadTimeSlots();
+                loadStats();
+            } else {
+                showAlert(result.error || 'Failed to generate time slots', 'danger');
+            }
+
+        } catch (error) {
+            console.error('Error generating time slots:', error);
+            showAlert('Network error. Please try again.', 'danger');
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    async function generateTimetable() {
+        try {
+            // Show progress
+            document.getElementById('generationProgress').classList.remove('d-none');
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('progressText').textContent = 'Starting generation...';
+
+            // Simulate progress updates
+            let progress = 0;
+            const progressInterval = setInterval(() => {
+                progress += Math.random() * 20;
+                if (progress > 90) progress = 90;
+
+                document.getElementById('progressBar').style.width = progress + '%';
+
+                if (progress < 30) {
+                    document.getElementById('progressText').textContent = 'Analyzing constraints...';
+                } else if (progress < 60) {
+                    document.getElementById('progressText').textContent = 'Scheduling classes...';
+                } else {
+                    document.getElementById('progressText').textContent = 'Optimizing schedule...';
+                }
+            }, 500);
+
+            const response = await fetch('/api/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            const result = await response.json();
+
+            clearInterval(progressInterval);
+            document.getElementById('progressBar').style.width = '100%';
+            document.getElementById('progressText').textContent = 'Complete!';
+
+            // Show results
+            showGenerationResults(result);
+
+        } catch (error) {
+            console.error('Error generating timetable:', error);
+            showAlert('Generation failed: ' + error.message, 'danger');
+            document.getElementById('generationProgress').classList.add('d-none');
+        }
+    }
+
+    function showGenerationResults(result) {
+        document.getElementById('generationResults').classList.remove('d-none');
+
+        let resultsHTML = '';
+
+        if (result.success) {
+            resultsHTML = `
+                <div class="alert alert-success">
+                    <h5><i class="fas fa-check-circle me-2"></i>Generation Successful!</h5>
+                    <p>${result.message}</p>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Statistics:</h6>
+                        <ul>
+                            <li>Total Demands: ${result.total_demands}</li>
+                            <li>Assigned Demands: ${result.assigned_demands}</li>
+                            <li>Iterations: ${result.iterations}</li>
+                            <li>Duration: ${result.duration_seconds.toFixed(2)} seconds</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Actions:</h6>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-primary" onclick="viewMasterTimetable()">
+                                <i class="fas fa-table me-2"></i>View Timetable
+                            </button>
+                            <button class="btn btn-success" onclick="exportTimetable()">
+                                <i class="fas fa-download me-2"></i>Export
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        } else {
+            resultsHTML = `
+                <div class="alert alert-danger">
+                    <h5><i class="fas fa-exclamation-triangle me-2"></i>Generation Failed</h5>
+                    <p>${result.message}</p>
+                </div>
+            `;
+
+            if (result.details && result.details.unmet_demands) {
+                resultsHTML += `
+                    <h6>Unmet Demands:</h6>
+                    <ul>
+                        ${result.details.unmet_demands.map(demand =>
+                            `<li>${demand.subject_section}: ${demand.missing} periods missing</li>`
+                        ).join('')}
+                    </ul>
+                `;
+            }
+
+            if (result.details && result.details.recommendations) {
+                resultsHTML += `
+                    <h6>Recommendations:</h6>
+                    <ul>
+                        ${result.details.recommendations.map(rec => `<li>${rec}</li>`).join('')}
+                    </ul>
+                `;
+            }
+        }
+
+        document.getElementById('resultsContent').innerHTML = resultsHTML;
+
+        // Hide progress after a delay
+        setTimeout(() => {
+            document.getElementById('generationProgress').classList.add('d-none');
+        }, 2000);
+    }
+
+    function clearTimetable() {
+        confirmAction(
+            'Are you sure you want to clear the current timetable? This action cannot be undone.',
+            async function() {
+                try {
+                    showLoading(true);
+                    // Implementation would require an API endpoint to clear timetable
+                    showAlert('Timetable cleared successfully', 'success');
+                    document.getElementById('generationResults').classList.add('d-none');
+                } catch (error) {
+                    showAlert('Failed to clear timetable', 'danger');
+                } finally {
+                    showLoading(false);
+                }
+            }
+        );
+    }
+
+    function viewMasterTimetable() {
+        window.location.href = '/timetable/master';
+    }
+
+    function exportTimetable() {
+        const format = prompt('Export format (csv/pdf):', 'pdf');
+        if (format && ['csv', 'pdf'].includes(format.toLowerCase())) {
+            window.open(`/api/timetable/export?format=${format}&target=master`, '_blank');
+        }
+    }
+</script>
+{% endblock %}
