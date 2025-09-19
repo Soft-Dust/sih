@@ -113,75 +113,113 @@ def delete_teacher(teacher_id):
 @bp.route('/students', methods=['GET'])
 @require_role('admin', 'teacher')
 def get_students():
-    students = Student.query.all()
-    return jsonify([student.to_dict() for student in students])
+    """Get all students with their details."""
+    students = Student.query.options(
+        db.joinedload(Student.user),
+        db.joinedload(Student.section)
+    ).all()
+    
+    return jsonify([{
+        'id': s.id,
+        'name': s.user.full_name,
+        'email': s.user.email,
+        'roll_number': getattr(s, 'roll_number', ''),  # Handle case where roll_number might not exist
+        'section_id': s.section_id,
+        'section_name': s.section.name if s.section else None
+    } for s in students])
 
 @bp.route('/students', methods=['POST'])
 @require_admin
 def create_student():
+    """Add a new student."""
     data = request.get_json()
-
-    # Create user first
+    
+    # Validate required fields
+    required_fields = ['username', 'full_name', 'password', 'section_id']
+    if not all(field in data for field in required_fields):
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    # Check if username already exists
+    if User.query.filter_by(username=data['username']).first():
+        return jsonify({'error': 'Username already exists'}), 400
+    
+    # Check if email already exists if provided
+    if 'email' in data and data['email'] and User.query.filter_by(email=data['email']).first():
+        return jsonify({'error': 'Email already in use'}), 400
+    
+    # Create user
     user = User(
         username=data['username'],
-        role='student',
         full_name=data['full_name'],
-        email=data.get('email')
+        email=data.get('email'),
+        role='student'
     )
     user.set_password(data['password'])
     db.session.add(user)
-    db.session.flush()
-
+    db.session.flush()  # Get the user ID
+    
     # Create student
     student = Student(
         user_id=user.id,
-        section_id=data['section_id']
+        section_id=data['section_id'],
+        roll_number=data.get('roll_number')
     )
     db.session.add(student)
     db.session.commit()
-
-    return jsonify(student.to_dict()), 201
+    
+    return jsonify({
+        'id': student.id,
+        'name': user.full_name,
+        'email': user.email,
+        'roll_number': student.roll_number,
+        'section_id': student.section_id
+    }), 201
 
 @bp.route('/students/<int:student_id>', methods=['PUT'])
 @require_admin
 def update_student(student_id):
+    """Update a student's information."""
     student = Student.query.get_or_404(student_id)
     data = request.get_json()
-
+    
     # Update user info
     if 'full_name' in data:
         student.user.full_name = data['full_name']
-    if 'email' in data:
+    if 'email' in data and data['email'] != student.user.email:
         # Check if email is being changed and if it's already taken
-        if data['email'] != student.user.email and User.query.filter_by(email=data['email']).first():
+        if User.query.filter(User.email == data['email'], User.id != student.user.id).first():
             return jsonify({'error': 'Email already in use'}), 400
         student.user.email = data['email']
     if 'password' in data and data['password']:
         student.user.set_password(data['password'])
-
+    
     # Update student info
     if 'section_id' in data:
         student.section_id = data['section_id']
-
+    if 'roll_number' in data:
+        student.roll_number = data['roll_number']
+    
     db.session.commit()
-
+    
     return jsonify({
         'id': student.id,
         'name': student.user.full_name,
         'email': student.user.email,
+        'roll_number': student.roll_number,
         'section_id': student.section_id
     })
 
 @bp.route('/students/<int:student_id>', methods=['DELETE'])
 @require_admin
 def delete_student(student_id):
+    """Delete a student and their associated user account."""
     student = Student.query.get_or_404(student_id)
     user = student.user
-
+    
     db.session.delete(student)
     db.session.delete(user)
     db.session.commit()
-
+    
     return jsonify({'message': 'Student deleted successfully'})
 
 # Sections CRUD
@@ -425,11 +463,31 @@ def generate_timetable():
     """Generate timetable using constraint scheduler"""
     try:
         scheduler = ConstraintScheduler()
-        result = scheduler.generate_timetable()
-        return jsonify(result)
+        report = scheduler.generate()
+        
+        # Clear existing timetable entries
+        TimetableEntry.query.delete()
+        
+        # Add new entries
+        for entry in report.timetable_entries:
+            db.session.add(entry)
+        
+        # Save generation report
+        db.session.add(report)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Timetable generated successfully',
+            'report_id': report.id
+        })
+        
     except Exception as e:
-        current_app.logger.error(f"Timetable generation failed: {str(e)}")
-        return jsonify({'error': f'Generation failed: {str(e)}'}), 500
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Error generating timetable: {str(e)}'
+        }), 500
 
 # Timetable viewing
 @bp.route('/timetable/master', methods=['GET'])
@@ -709,171 +767,3 @@ def get_dashboard_stats():
         stats['last_generation'] = last_report.to_dict()
 
     return jsonify(stats)
-
-# Student Management Endpoints
-@bp.route('/students', methods=['GET'])
-@require_role('admin')
-def get_students():
-    """Get all students with their details."""
-    students = Student.query.options(
-        db.joinedload(Student.user),
-        db.joinedload(Student.section)
-    ).all()
-
-    return jsonify([{
-        'id': s.id,
-        'name': s.user.full_name,
-        'email': s.user.email,
-        'section_id': s.section_id,
-        'section_name': s.section.name if s.section else None
-    } for s in students])
-
-@bp.route('/students', methods=['POST'])
-@require_role('admin')
-def add_student():
-    """Add a new student."""
-    data = request.get_json()
-
-    # Validate required fields
-    required_fields = ['full_name', 'email', 'section_id', 'password']
-    if not all(field in data for field in required_fields):
-        return jsonify({'error': 'Missing required fields'}), 400
-
-    # Check if email already exists
-    if User.query.filter_by(email=data['email']).first():
-        return jsonify({'error': 'Email already exists'}), 400
-
-    # Create user
-    user = User(
-        username=data['email'],
-        role='student',
-        full_name=data['full_name'],
-        email=data['email']
-    )
-    user.set_password(data['password'])
-    db.session.add(user)
-    db.session.flush()  # Get the user ID
-
-    # Create student
-    student = Student(
-        user_id=user.id,
-        section_id=data['section_id']
-    )
-    db.session.add(student)
-    db.session.commit()
-
-    return jsonify({
-        'id': student.id,
-        'name': user.full_name,
-        'email': user.email,
-        'section_id': student.section_id
-    }), 201
-
-@bp.route('/students/<int:student_id>', methods=['PUT'])
-@require_role('admin')
-def update_student(student_id):
-    """Update a student's information."""
-    student = Student.query.get_or_404(student_id)
-    data = request.get_json()
-
-    # Update user info
-    if 'full_name' in data:
-        student.user.full_name = data['full_name']
-    if 'email' in data:
-        # Check if email is being changed and if it's already taken
-        if data['email'] != student.user.email and User.query.filter_by(email=data['email']).first():
-            return jsonify({'error': 'Email already in use'}), 400
-        student.user.email = data['email']
-    if 'password' in data and data['password']:
-        student.user.set_password(data['password'])
-
-    # Update student info
-    if 'section_id' in data:
-        student.section_id = data['section_id']
-
-    db.session.commit()
-
-    return jsonify({
-        'id': student.id,
-        'name': student.user.full_name,
-        'email': student.user.email,
-        'section_id': student.section_id
-    })
-
-@bp.route('/students/<int:student_id>', methods=['DELETE'])
-@require_role('admin')
-def delete_student(student_id):
-    """Delete a student and their associated user account."""
-    student = Student.query.get_or_404(student_id)
-    user = student.user
-
-    db.session.delete(student)
-    db.session.delete(user)
-    db.session.commit()
-
-    return jsonify({'message': 'Student deleted successfully'})
-
-# Timetable Generation Endpoint
-@bp.route('/generate-timetable', methods=['POST'])
-@require_admin
-def generate_timetable():
-    """Generate a timetable based on constraints."""
-    try:
-        # This is a simplified version - implement your actual algorithm here
-        # This is just a placeholder that returns a basic structure
-
-        # Get all sections, teachers, subjects, and classrooms
-        sections = Section.query.all()
-        teachers = Teacher.query.all()
-        subjects = Subject.query.all()
-        classrooms = Classroom.query.all()
-
-        if not all([sections, teachers, subjects, classrooms]):
-            return jsonify({
-                "success": False,
-                "message": "Insufficient data. Please ensure you have sections, teachers, subjects, and classrooms added."
-            }), 400
-
-        # This is a very basic random assignment - replace with your algorithm
-        days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-        periods = [1, 2, 3, 4, 5, 6]  # Assuming 6 periods per day
-
-        generated_entries = []
-
-        for section in sections:
-            for day in days:
-                for period in periods:
-                    # Skip some periods randomly to simulate free periods
-                    if random.random() < 0.2:  # 20% chance of free period
-                        continue
-
-                    teacher = random.choice(teachers)
-                    subject = random.choice(subjects)
-                    classroom = random.choice(classrooms)
-
-                    entry = {
-                        'section_id': section.id,
-                        'section_name': section.name,
-                        'day': day,
-                        'period': period,
-                        'teacher_id': teacher.id,
-                        'teacher_name': teacher.user.full_name,
-                        'subject_id': subject.id,
-                        'subject_name': subject.name,
-                        'classroom_id': classroom.id,
-                        'classroom_name': classroom.name
-                    }
-                    generated_entries.append(entry)
-
-        return jsonify({
-            "success": True,
-            "message": "Timetable generated successfully",
-            "data": generated_entries,
-            "note": "This is a placeholder implementation. Implement your actual algorithm here."
-        })
-
-    except Exception as e:
-        return jsonify({
-            "success": False,
-            "message": f"Error generating timetable: {str(e)}"
-        }), 500
